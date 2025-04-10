@@ -2,63 +2,58 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Model Scanner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mobile Barcode Scanner</title>
     <style>
-        * {
+        body {
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        body {
-            background-color: #f5f5f5;
-            color: #333;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .header {
-            background-color: #6200ee;
-            color: white;
-            padding: 15px;
-            text-align: center;
-            font-size: 1.2rem;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
         }
         
         .scanner-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        
-        .scanning-area {
-            width: 90%;
-            height: 60vh;
-            border: 4px dashed #6200ee;
-            border-radius: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #e0e0e0;
             position: relative;
+            width: 100vw;
+            height: 100vh;
             overflow: hidden;
         }
         
-        .scanning-animation {
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .scan-overlay {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
-            height: 5px;
-            background-color: rgba(98, 0, 238, 0.5);
-            animation: scan 3s infinite;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+        
+        .scan-frame {
+            width: 80%;
+            height: 40%;
+            max-width: 400px;
+            border: 3px solid rgba(0, 255, 0, 0.5);
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            position: relative;
+        }
+        
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 4px;
+            background: rgba(0, 255, 0, 0.5);
+            animation: scan 2s linear infinite;
         }
         
         @keyframes scan {
@@ -66,167 +61,227 @@
             100% { top: 100%; }
         }
         
-        .scanning-text {
-            margin-top: 20px;
-            font-size: 1.1rem;
-            color: #6200ee;
-        }
-        
         .controls {
-            display: flex;
-            justify-content: space-around;
+            position: absolute;
+            bottom: 20px;
             width: 100%;
-            padding: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
         }
         
-        .btn {
-            padding: 12px 25px;
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
             border: none;
-            border-radius: 25px;
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .btn-primary {
-            background-color: #6200ee;
+            border-radius: 50px;
+            background: #007bff;
             color: white;
+            cursor: pointer;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
         
-        .btn-secondary {
-            background-color: white;
-            color: #6200ee;
-            border: 2px solid #6200ee;
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
         }
         
-        .btn:active {
-            transform: scale(0.95);
-        }
-        
-        .preview-window {
+        .result-panel {
             position: absolute;
-            width: 80%;
-            height: 80%;
-            background-color: rgba(255,255,255,0.8);
-            display: none;
-            border-radius: 10px;
-            padding: 10px;
-        }
-        
-        .progress-bar {
-            width: 0%;
-            height: 5px;
-            background-color: #6200ee;
-            position: absolute;
-            bottom: 0;
+            top: 0;
             left: 0;
-            transition: width 0.3s;
+            width: 100%;
+            height: 100%;
+            background: white;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
         }
         
-        @media (max-width: 480px) {
-            .scanning-area {
-                height: 50vh;
-            }
-            
-            .btn {
-                padding: 10px 20px;
-            }
+        .result-content {
+            max-width: 90%;
+            word-wrap: break-word;
+            text-align: center;
+        }
+        
+        .close-result {
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        3D Model Scanner
-    </div>
-    
     <div class="scanner-container">
-        <div class="scanning-area">
-            <div class="scanning-animation"></div>
-            <div class="preview-window">
-                <h3>Model Preview</h3>
-                <div style="width:100%; height:80%; background-color:#ddd; display:flex; align-items:center; justify-content:center;">
-                    [3D Model Will Appear Here]
-                </div>
-                <div class="progress-bar"></div>
+        <video id="video" playsinline></video>
+        
+        <div class="scan-overlay">
+            <div class="scan-frame">
+                <div class="scan-line"></div>
             </div>
+            <p style="color: white; margin-top: 20px; text-shadow: 0 0 5px black;">Align barcode or QR code within the frame</p>
         </div>
-        <p class="scanning-text">Move your device around the object to scan</p>
         
         <div class="controls">
-            <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
-            <button class="btn btn-primary" id="scanBtn">Start Scan</button>
-            <button class="btn btn-primary" id="saveBtn" style="display:none;">Save Model</button>
+            <button id="toggleFlash">Flash Off</button>
+            <button id="switchCamera">Switch Camera</button>
+        </div>
+        
+        <div class="result-panel" id="resultPanel">
+            <h2>Scan Result</h2>
+            <div class="result-content" id="resultContent"></div>
+            <button class="close-result" id="closeResult">Close</button>
         </div>
     </div>
+
+    <!-- Include the barcode scanner library -->
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest"></script>
     
     <script>
-        const scanBtn = document.getElementById('scanBtn');
-        const cancelBtn = document.getElementById('cancelBtn');
-        const saveBtn = document.getElementById('saveBtn');
-        const scanningArea = document.querySelector('.scanning-area');
-        const previewWindow = document.querySelector('.preview-window');
-        const progressBar = document.querySelector('.progress-bar');
-        const scanningAnimation = document.querySelector('.scanning-animation');
+        // DOM elements
+        const video = document.getElementById('video');
+        const toggleFlash = document.getElementById('toggleFlash');
+        const switchCamera = document.getElementById('switchCamera');
+        const resultPanel = document.getElementById('resultPanel');
+        const resultContent = document.getElementById('resultContent');
+        const closeResult = document.getElementById('closeResult');
         
-        scanBtn.addEventListener('click', () => {
-            scanBtn.style.display = 'none';
-            cancelBtn.textContent = 'Stop';
-            scanningAnimation.style.display = 'block';
-            
-            // Simulate scanning progress
-            let progress = 0;
-            const scanInterval = setInterval(() => {
-                progress += 5;
-                if(progress >= 100) {
-                    clearInterval(scanInterval);
-                    scanningComplete();
-                }
-            }, 300);
-            
-            cancelBtn.onclick = function() {
-                clearInterval(scanInterval);
-                resetScanner();
-            };
-        });
+        // Scanner variables
+        let codeReader;
+        let currentDeviceId = null;
+        let isFlashOn = false;
+        let torchSupported = false;
         
-        function scanningComplete() {
-            scanningAnimation.style.display = 'none';
-            cancelBtn.style.display = 'none';
-            saveBtn.style.display = 'block';
-            previewWindow.style.display = 'block';
+        // Initialize the scanner
+        async function initScanner() {
+            codeReader = new ZXing.BrowserMultiFormatReader();
             
-            // Simulate processing
-            let process = 0;
-            const processInterval = setInterval(() => {
-                process += 2;
-                progressBar.style.width = process + '%';
-                if(process >= 100) {
-                    clearInterval(processInterval);
+            try {
+                // Get list of available cameras
+                const videoInputDevices = await ZXing.BrowserMultiFormatReader.listVideoInputDevices();
+                
+                if (videoInputDevices.length === 0) {
+                    throw new Error('No cameras found');
                 }
-            }, 50);
+                
+                // Check for torch/flash support
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        advanced: [{ torch: true }]
+                    }
+                });
+                torchSupported = stream.getVideoTracks()[0].getCapabilities().torch;
+                stream.getTracks().forEach(track => track.stop());
+                
+                // Start with back camera (environment)
+                startScanning('environment');
+                
+                // Set up camera switch button
+                if (videoInputDevices.length > 1) {
+                    switchCamera.addEventListener('click', toggleCamera);
+                } else {
+                    switchCamera.disabled = true;
+                }
+                
+                // Set up flash toggle button
+                if (torchSupported) {
+                    toggleFlash.addEventListener('click', toggleFlashlight);
+                } else {
+                    toggleFlash.disabled = true;
+                }
+                
+            } catch (error) {
+                console.error('Error initializing scanner:', error);
+                alert('Error accessing camera: ' + error.message);
+            }
         }
         
-        function resetScanner() {
-            scanBtn.style.display = 'block';
-            cancelBtn.textContent = 'Cancel';
-            cancelBtn.style.display = 'block';
-            saveBtn.style.display = 'none';
-            previewWindow.style.display = 'none';
-            scanningAnimation.style.display = 'none';
-            progressBar.style.width = '0%';
-            
-            cancelBtn.onclick = function() {
-                // Cancel action
-                resetScanner();
-            };
+        // Start scanning with specified camera
+        async function startScanning(facingMode) {
+            try {
+                await codeReader.decodeFromVideoDevice(
+                    currentDeviceId, 
+                    video, 
+                    (result, error) => {
+                        if (result) {
+                            handleScanResult(result.text);
+                        }
+                        if (error && !(error instanceof ZXing.NotFoundException)) {
+                            console.error('Scan error:', error);
+                        }
+                    },
+                    {
+                        facingMode: facingMode,
+                        focusMode: 'continuous'
+                    }
+                );
+            } catch (error) {
+                console.error('Error starting scanner:', error);
+            }
         }
         
-        saveBtn.addEventListener('click', () => {
-            alert('3D model saved successfully!');
-            resetScanner();
+        // Handle scan results
+        function handleScanResult(result) {
+            console.log('Scan result:', result);
+            resultContent.textContent = result;
+            resultPanel.style.display = 'flex';
+            
+            // Stop scanning when result is found
+            codeReader.reset();
+            
+            // Try to make the result actionable
+            if (result.startsWith('http://') || result.startsWith('https://')) {
+                resultContent.innerHTML = `${result}<br><br><a href="${result}" target="_blank">Open Link</a>`;
+            } else if (result.startsWith('tel:')) {
+                resultContent.innerHTML = `${result.substring(4)}<br><br><a href="${result}">Call Number</a>`;
+            } else if (result.startsWith('mailto:')) {
+                resultContent.innerHTML = `${result.substring(7)}<br><br><a href="${result}">Send Email</a>`;
+            }
+        }
+        
+        // Toggle between front and back cameras
+        async function toggleCamera() {
+            codeReader.reset();
+            const currentFacingMode = currentDeviceId === 'environment' ? 'user' : 'environment';
+            startScanning(currentFacingMode);
+        }
+        
+        // Toggle flashlight
+        async function toggleFlashlight() {
+            if (!torchSupported) return;
+            
+            const stream = video.srcObject;
+            if (!stream) return;
+            
+            const track = stream.getVideoTracks()[0];
+            try {
+                await track.applyConstraints({
+                    advanced: [{ torch: !isFlashOn }]
+                });
+                isFlashOn = !isFlashOn;
+                toggleFlash.textContent = isFlashOn ? 'Flash On' : 'Flash Off';
+            } catch (error) {
+                console.error('Error toggling flash:', error);
+            }
+        }
+        
+        // Close result panel and resume scanning
+        closeResult.addEventListener('click', () => {
+            resultPanel.style.display = 'none';
+            startScanning(currentDeviceId);
         });
+        
+        // Clean up when page is closed
+        window.addEventListener('beforeunload', () => {
+            if (codeReader) {
+                codeReader.reset();
+            }
+        });
+        
+        // Initialize the scanner when page loads
+        window.addEventListener('DOMContentLoaded', initScanner);
     </script>
 </body>
 </html>

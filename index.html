@@ -1,73 +1,65 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mobile Barcode Scanner</title>
+    <title>3D Object Scanner</title>
     <style>
         body {
             margin: 0;
             padding: 0;
             font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
+            overflow: hidden;
+            touch-action: none;
         }
         
-        .scanner-container {
+        #app-container {
             position: relative;
             width: 100vw;
             height: 100vh;
-            overflow: hidden;
         }
         
-        #video {
+        /* Camera View Styles */
+        #camera-view {
+            position: absolute;
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
         
-        .scan-overlay {
+        #scanning-ui {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
             pointer-events: none;
         }
         
-        .scan-frame {
+        #scanning-frame {
             width: 80%;
-            height: 40%;
-            max-width: 400px;
-            border: 3px solid rgba(0, 255, 0, 0.5);
+            height: 60%;
+            margin: 15% auto;
+            border: 3px dashed rgba(0, 255, 0, 0.7);
             border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-            position: relative;
         }
         
-        .scan-line {
+        #instructions {
+            color: white;
+            text-align: center;
+            margin-top: 10px;
+            text-shadow: 0 0 5px black;
+        }
+        
+        /* Controls */
+        #controls {
             position: absolute;
-            width: 100%;
-            height: 4px;
-            background: rgba(0, 255, 0, 0.5);
-            animation: scan 2s linear infinite;
-        }
-        
-        @keyframes scan {
-            0% { top: 0; }
-            100% { top: 100%; }
-        }
-        
-        .controls {
-            position: absolute;
-            bottom: 20px;
+            bottom: 30px;
             width: 100%;
             display: flex;
             justify-content: center;
             gap: 15px;
+            pointer-events: auto;
         }
         
         button {
@@ -75,213 +67,353 @@
             font-size: 16px;
             border: none;
             border-radius: 50px;
-            background: #007bff;
+            background: rgba(0, 150, 255, 0.9);
             color: white;
             cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
         
-        button:disabled {
-            background: #cccccc;
-            cursor: not-allowed;
-        }
-        
-        .result-panel {
+        /* 3D Model View Styles */
+        #model-view {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: white;
+            background: black;
             display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            box-sizing: border-box;
         }
         
-        .result-content {
-            max-width: 90%;
-            word-wrap: break-word;
-            text-align: center;
+        #back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            display: none;
         }
         
-        .close-result {
-            margin-top: 20px;
+        #progress-container {
+            position: absolute;
+            bottom: 100px;
+            width: 80%;
+            left: 10%;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            padding: 5px;
+            display: none;
+        }
+        
+        #progress-bar {
+            height: 20px;
+            background: linear-gradient(to right, #00ff00, #00cc00);
+            width: 0%;
+            border-radius: 5px;
+            transition: width 0.3s;
         }
     </style>
 </head>
 <body>
-    <div class="scanner-container">
-        <video id="video" playsinline></video>
+    <div id="app-container">
+        <!-- Camera View -->
+        <video id="camera-view" autoplay playsinline></video>
         
-        <div class="scan-overlay">
-            <div class="scan-frame">
-                <div class="scan-line"></div>
-            </div>
-            <p style="color: white; margin-top: 20px; text-shadow: 0 0 5px black;">Align barcode or QR code within the frame</p>
+        <div id="scanning-ui">
+            <div id="scanning-frame"></div>
+            <div id="instructions">Move around the object slowly</div>
         </div>
         
-        <div class="controls">
-            <button id="toggleFlash">Flash Off</button>
-            <button id="switchCamera">Switch Camera</button>
+        <div id="controls">
+            <button id="start-button">Start Scan</button>
+            <button id="process-button" disabled>Generate 3D Model</button>
         </div>
         
-        <div class="result-panel" id="resultPanel">
-            <h2>Scan Result</h2>
-            <div class="result-content" id="resultContent"></div>
-            <button class="close-result" id="closeResult">Close</button>
+        <div id="progress-container">
+            <div id="progress-bar"></div>
         </div>
+        
+        <!-- 3D Model View -->
+        <div id="model-view"></div>
+        <button id="back-button">← Back to Scanner</button>
     </div>
 
-    <!-- Include the barcode scanner library -->
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest"></script>
+    <!-- Three.js for 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Load GLTFLoader for model loading -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.min.js"></script>
+    <!-- Optional: AR.js for augmented reality features -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/ar.js@1.7.5/aframe/build/aframe-ar.min.js"></script> -->
     
     <script>
-        // DOM elements
-        const video = document.getElementById('video');
-        const toggleFlash = document.getElementById('toggleFlash');
-        const switchCamera = document.getElementById('switchCamera');
-        const resultPanel = document.getElementById('resultPanel');
-        const resultContent = document.getElementById('resultContent');
-        const closeResult = document.getElementById('closeResult');
+        // Main application state
+        const appState = {
+            isScanning: false,
+            capturedFrames: [],
+            cameraStream: null,
+            scanInterval: null,
+            threeJS: {
+                scene: null,
+                camera: null,
+                renderer: null,
+                model: null
+            }
+        };
         
-        // Scanner variables
-        let codeReader;
-        let currentDeviceId = null;
-        let isFlashOn = false;
-        let torchSupported = false;
+        // DOM Elements
+        const elements = {
+            cameraView: document.getElementById('camera-view'),
+            startButton: document.getElementById('start-button'),
+            processButton: document.getElementById('process-button'),
+            modelView: document.getElementById('model-view'),
+            backButton: document.getElementById('back-button'),
+            progressContainer: document.getElementById('progress-container'),
+            progressBar: document.getElementById('progress-bar')
+        };
         
-        // Initialize the scanner
-        async function initScanner() {
-            codeReader = new ZXing.BrowserMultiFormatReader();
-            
+        // Initialize the application
+        async function initApp() {
+            await initCamera();
+            setupEventListeners();
+        }
+        
+        // Initialize device camera
+        async function initCamera() {
             try {
-                // Get list of available cameras
-                const videoInputDevices = await ZXing.BrowserMultiFormatReader.listVideoInputDevices();
-                
-                if (videoInputDevices.length === 0) {
-                    throw new Error('No cameras found');
-                }
-                
-                // Check for torch/flash support
-                const stream = await navigator.mediaDevices.getUserMedia({
+                elements.cameraView.srcObject = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: 'environment',
-                        advanced: [{ torch: true }]
-                    }
-                });
-                torchSupported = stream.getVideoTracks()[0].getCapabilities().torch;
-                stream.getTracks().forEach(track => track.stop());
-                
-                // Start with back camera (environment)
-                startScanning('environment');
-                
-                // Set up camera switch button
-                if (videoInputDevices.length > 1) {
-                    switchCamera.addEventListener('click', toggleCamera);
-                } else {
-                    switchCamera.disabled = true;
-                }
-                
-                // Set up flash toggle button
-                if (torchSupported) {
-                    toggleFlash.addEventListener('click', toggleFlashlight);
-                } else {
-                    toggleFlash.disabled = true;
-                }
-                
-            } catch (error) {
-                console.error('Error initializing scanner:', error);
-                alert('Error accessing camera: ' + error.message);
-            }
-        }
-        
-        // Start scanning with specified camera
-        async function startScanning(facingMode) {
-            try {
-                await codeReader.decodeFromVideoDevice(
-                    currentDeviceId, 
-                    video, 
-                    (result, error) => {
-                        if (result) {
-                            handleScanResult(result.text);
-                        }
-                        if (error && !(error instanceof ZXing.NotFoundException)) {
-                            console.error('Scan error:', error);
-                        }
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
                     },
-                    {
-                        facingMode: facingMode,
-                        focusMode: 'continuous'
-                    }
-                );
-            } catch (error) {
-                console.error('Error starting scanner:', error);
-            }
-        }
-        
-        // Handle scan results
-        function handleScanResult(result) {
-            console.log('Scan result:', result);
-            resultContent.textContent = result;
-            resultPanel.style.display = 'flex';
-            
-            // Stop scanning when result is found
-            codeReader.reset();
-            
-            // Try to make the result actionable
-            if (result.startsWith('http://') || result.startsWith('https://')) {
-                resultContent.innerHTML = `${result}<br><br><a href="${result}" target="_blank">Open Link</a>`;
-            } else if (result.startsWith('tel:')) {
-                resultContent.innerHTML = `${result.substring(4)}<br><br><a href="${result}">Call Number</a>`;
-            } else if (result.startsWith('mailto:')) {
-                resultContent.innerHTML = `${result.substring(7)}<br><br><a href="${result}">Send Email</a>`;
-            }
-        }
-        
-        // Toggle between front and back cameras
-        async function toggleCamera() {
-            codeReader.reset();
-            const currentFacingMode = currentDeviceId === 'environment' ? 'user' : 'environment';
-            startScanning(currentFacingMode);
-        }
-        
-        // Toggle flashlight
-        async function toggleFlashlight() {
-            if (!torchSupported) return;
-            
-            const stream = video.srcObject;
-            if (!stream) return;
-            
-            const track = stream.getVideoTracks()[0];
-            try {
-                await track.applyConstraints({
-                    advanced: [{ torch: !isFlashOn }]
+                    audio: false
                 });
-                isFlashOn = !isFlashOn;
-                toggleFlash.textContent = isFlashOn ? 'Flash On' : 'Flash Off';
-            } catch (error) {
-                console.error('Error toggling flash:', error);
+                appState.cameraStream = elements.cameraView.srcObject;
+            } catch (err) {
+                console.error("Camera error:", err);
+                alert("Camera access denied. Please enable camera permissions.");
             }
         }
         
-        // Close result panel and resume scanning
-        closeResult.addEventListener('click', () => {
-            resultPanel.style.display = 'none';
-            startScanning(currentDeviceId);
-        });
+        // Set up event listeners
+        function setupEventListeners() {
+            elements.startButton.addEventListener('click', toggleScanning);
+            elements.processButton.addEventListener('click', processScan);
+            elements.backButton.addEventListener('click', showScannerView);
+            
+            window.addEventListener('resize', handleResize);
+        }
         
-        // Clean up when page is closed
-        window.addEventListener('beforeunload', () => {
-            if (codeReader) {
-                codeReader.reset();
+        // Toggle scanning state
+        function toggleScanning() {
+            appState.isScanning = !appState.isScanning;
+            
+            if (appState.isScanning) {
+                startScanning();
+            } else {
+                stopScanning();
             }
-        });
+        }
         
-        // Initialize the scanner when page loads
-        window.addEventListener('DOMContentLoaded', initScanner);
+        // Start the scanning process
+        function startScanning() {
+            elements.startButton.textContent = "Stop Scan";
+            elements.processButton.disabled = true;
+            appState.capturedFrames = [];
+            
+            // Show scanning instructions
+            document.getElementById('instructions').textContent = "Move around the object slowly";
+            
+            // Start capturing frames
+            appState.scanInterval = setInterval(captureFrame, 500);
+            
+            console.log("Scanning started...");
+        }
+        
+        // Stop scanning
+        function stopScanning() {
+            elements.startButton.textContent = "Start Scan";
+            clearInterval(appState.scanInterval);
+            
+            if (appState.capturedFrames.length > 0) {
+                elements.processButton.disabled = false;
+            }
+            
+            console.log(`Scanning stopped. Captured ${appState.capturedFrames.length} frames`);
+        }
+        
+        // Capture a frame from the camera
+        function captureFrame() {
+            const canvas = document.createElement('canvas');
+            canvas.width = elements.cameraView.videoWidth;
+            canvas.height = elements.cameraView.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(elements.cameraView, 0, 0);
+            
+            // Store frame data
+            appState.capturedFrames.push({
+                imageData: canvas.toDataURL('image/jpeg', 0.8),
+                timestamp: Date.now(),
+                // In a real app, you'd include device motion data here
+                orientation: {
+                    alpha: 0, beta: 0, gamma: 0 // Placeholder for device orientation
+                }
+            });
+            
+            console.log(`Frame ${appState.capturedFrames.length} captured`);
+        }
+        
+        // Process the captured frames into a 3D model
+        async function processScan() {
+            if (appState.capturedFrames.length < 5) {
+                alert("Not enough frames captured. Please scan from more angles.");
+                return;
+            }
+            
+            showProcessingUI(true);
+            
+            // Simulate processing (in a real app, you'd send to a backend or use WASM)
+            simulateModelProcessing();
+        }
+        
+        // Show processing UI
+        function showProcessingUI(show) {
+            if (show) {
+                elements.progressContainer.style.display = 'block';
+                elements.progressBar.style.width = '0%';
+                elements.startButton.disabled = true;
+                elements.processButton.disabled = true;
+            } else {
+                elements.progressContainer.style.display = 'none';
+                elements.startButton.disabled = false;
+            }
+        }
+        
+        // Simulate model processing (replace with actual implementation)
+        function simulateModelProcessing() {
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 5;
+                elements.progressBar.style.width = `${progress}%`;
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    showProcessingUI(false);
+                    init3DViewer();
+                    showModelView();
+                    
+                    // In a real app, you would load the actual generated model
+                    loadSample3DModel();
+                }
+            }, 200);
+        }
+        
+        // Initialize Three.js viewer
+        function init3DViewer() {
+            // Create scene
+            appState.threeJS.scene = new THREE.Scene();
+            appState.threeJS.scene.background = new THREE.Color(0x222222);
+            
+            // Create camera
+            appState.threeJS.camera = new THREE.PerspectiveCamera(
+                75, 
+                window.innerWidth / window.innerHeight, 
+                0.1, 
+                1000
+            );
+            appState.threeJS.camera.position.z = 5;
+            
+            // Create renderer
+            appState.threeJS.renderer = new THREE.WebGLRenderer({ antialias: true });
+            appState.threeJS.renderer.setSize(window.innerWidth, window.innerHeight);
+            elements.modelView.innerHTML = '';
+            elements.modelView.appendChild(appState.threeJS.renderer.domElement);
+            
+            // Add lights
+            const ambientLight = new THREE.AmbientLight(0x404040);
+            appState.threeJS.scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            appState.threeJS.scene.add(directionalLight);
+            
+            // Add orbit controls in a real implementation
+            // const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            
+            // Animation loop
+            function animate() {
+                requestAnimationFrame(animate);
+                if (appState.threeJS.model) {
+                    appState.threeJS.model.rotation.y += 0.01;
+                }
+                appState.threeJS.renderer.render(appState.threeJS.scene, appState.threeJS.camera);
+            }
+            animate();
+        }
+        
+        // Load a sample 3D model (replace with your generated model)
+        function loadSample3DModel() {
+            // Create a simple placeholder model
+            // In reality, you would load your generated 3D model here
+            
+            // Create a point cloud from the captured frames (simplified)
+            const points = [];
+            const colors = [];
+            
+            // Generate random points for demonstration
+            for (let i = 0; i < 1000; i++) {
+                points.push(
+                    (Math.random() - 0.5) * 2,
+                    (Math.random() - 0.5) * 2,
+                    (Math.random() - 0.5) * 2
+                );
+                
+                colors.push(
+                    Math.random(),
+                    Math.random(),
+                    Math.random()
+                );
+            }
+            
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            
+            const material = new THREE.PointsMaterial({
+                size: 0.05,
+                vertexColors: true
+            });
+            
+            appState.threeJS.model = new THREE.Points(geometry, material);
+            appState.threeJS.scene.add(appState.threeJS.model);
+        }
+        
+        // Show the 3D model view
+        function showModelView() {
+            document.getElementById('camera-view').style.display = 'none';
+            document.getElementById('scanning-ui').style.display = 'none';
+            document.getElementById('controls').style.display = 'none';
+            elements.modelView.style.display = 'block';
+            elements.backButton.style.display = 'block';
+        }
+        
+        // Show the scanner view
+        function showScannerView() {
+            document.getElementById('camera-view').style.display = 'block';
+            document.getElementById('scanning-ui').style.display = 'block';
+            document.getElementById('controls').style.display = 'flex';
+            elements.modelView.style.display = 'none';
+            elements.backButton.style.display = 'none';
+        }
+        
+        // Handle window resize
+        function handleResize() {
+            if (appState.threeJS.renderer) {
+                appState.threeJS.camera.aspect = window.innerWidth / window.innerHeight;
+                appState.threeJS.camera.updateProjectionMatrix();
+                appState.threeJS.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        }
+        
+        // Start the application
+        initApp();
     </script>
 </body>
 </html>

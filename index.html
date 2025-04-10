@@ -1,419 +1,57 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Object Scanner</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-            overflow: hidden;
-            touch-action: none;
-        }
-        
-        #app-container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-        }
-        
-        /* Camera View Styles */
-        #camera-view {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        #scanning-ui {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
-        
-        #scanning-frame {
-            width: 80%;
-            height: 60%;
-            margin: 15% auto;
-            border: 3px dashed rgba(0, 255, 0, 0.7);
-            border-radius: 10px;
-        }
-        
-        #instructions {
-            color: white;
-            text-align: center;
-            margin-top: 10px;
-            text-shadow: 0 0 5px black;
-        }
-        
-        /* Controls */
-        #controls {
-            position: absolute;
-            bottom: 30px;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            pointer-events: auto;
-        }
-        
-        button {
-            padding: 12px 24px;
-            font-size: 16px;
-            border: none;
-            border-radius: 50px;
-            background: rgba(0, 150, 255, 0.9);
-            color: white;
-            cursor: pointer;
-        }
-        
-        /* 3D Model View Styles */
-        #model-view {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: black;
-            display: none;
-        }
-        
-        #back-button {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 100;
-            display: none;
-        }
-        
-        #progress-container {
-            position: absolute;
-            bottom: 100px;
-            width: 80%;
-            left: 10%;
-            background: rgba(0,0,0,0.5);
-            border-radius: 10px;
-            padding: 5px;
-            display: none;
-        }
-        
-        #progress-bar {
-            height: 20px;
-            background: linear-gradient(to right, #00ff00, #00cc00);
-            width: 0%;
-            border-radius: 5px;
-            transition: width 0.3s;
-        }
-    </style>
+  <title>Real-time Face Mesh</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 </head>
 <body>
-    <div id="app-container">
-        <!-- Camera View -->
-        <video id="camera-view" autoplay playsinline></video>
-        
-        <div id="scanning-ui">
-            <div id="scanning-frame"></div>
-            <div id="instructions">Move around the object slowly</div>
-        </div>
-        
-        <div id="controls">
-            <button id="start-button">Start Scan</button>
-            <button id="process-button" disabled>Generate 3D Model</button>
-        </div>
-        
-        <div id="progress-container">
-            <div id="progress-bar"></div>
-        </div>
-        
-        <!-- 3D Model View -->
-        <div id="model-view"></div>
-        <button id="back-button">← Back to Scanner</button>
-    </div>
+<video class="input_video" style="display:none;"></video>
+<canvas class="output_canvas" width="640px" height="480px"></canvas>
 
-    <!-- Three.js for 3D rendering -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- Load GLTFLoader for model loading -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.min.js"></script>
-    <!-- Optional: AR.js for augmented reality features -->
-    <!-- <script src="https://cdn.jsdelivr.net/npm/ar.js@1.7.5/aframe/build/aframe-ar.min.js"></script> -->
-    
-    <script>
-        // Main application state
-        const appState = {
-            isScanning: false,
-            capturedFrames: [],
-            cameraStream: null,
-            scanInterval: null,
-            threeJS: {
-                scene: null,
-                camera: null,
-                renderer: null,
-                model: null
-            }
-        };
-        
-        // DOM Elements
-        const elements = {
-            cameraView: document.getElementById('camera-view'),
-            startButton: document.getElementById('start-button'),
-            processButton: document.getElementById('process-button'),
-            modelView: document.getElementById('model-view'),
-            backButton: document.getElementById('back-button'),
-            progressContainer: document.getElementById('progress-container'),
-            progressBar: document.getElementById('progress-bar')
-        };
-        
-        // Initialize the application
-        async function initApp() {
-            await initCamera();
-            setupEventListeners();
+<script>
+  const videoElement = document.getElementsByClassName('input_video')[0];
+  const canvasElement = document.getElementsByClassName('output_canvas')[0];
+  const canvasCtx = canvasElement.getContext('2d');
+
+  const faceMesh = new FaceMesh({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+  });
+
+  faceMesh.setOptions({
+    maxNumFaces: 1,
+    refineLandmarks: true,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5
+  });
+
+  faceMesh.onResults((results) => {
+    canvasCtx.save();
+    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+    if (results.multiFaceLandmarks) {
+      for (const landmarks of results.multiFaceLandmarks) {
+        for (let i = 0; i < landmarks.length; i++) {
+          const x = landmarks[i].x * canvasElement.width;
+          const y = landmarks[i].y * canvasElement.height;
+          canvasCtx.beginPath();
+          canvasCtx.arc(x, y, 1, 0, 2 * Math.PI);
+          canvasCtx.fillStyle = 'red';
+          canvasCtx.fill();
         }
-        
-        // Initialize device camera
-        async function initCamera() {
-            try {
-                elements.cameraView.srcObject = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    },
-                    audio: false
-                });
-                appState.cameraStream = elements.cameraView.srcObject;
-            } catch (err) {
-                console.error("Camera error:", err);
-                alert("Camera access denied. Please enable camera permissions.");
-            }
-        }
-        
-        // Set up event listeners
-        function setupEventListeners() {
-            elements.startButton.addEventListener('click', toggleScanning);
-            elements.processButton.addEventListener('click', processScan);
-            elements.backButton.addEventListener('click', showScannerView);
-            
-            window.addEventListener('resize', handleResize);
-        }
-        
-        // Toggle scanning state
-        function toggleScanning() {
-            appState.isScanning = !appState.isScanning;
-            
-            if (appState.isScanning) {
-                startScanning();
-            } else {
-                stopScanning();
-            }
-        }
-        
-        // Start the scanning process
-        function startScanning() {
-            elements.startButton.textContent = "Stop Scan";
-            elements.processButton.disabled = true;
-            appState.capturedFrames = [];
-            
-            // Show scanning instructions
-            document.getElementById('instructions').textContent = "Move around the object slowly";
-            
-            // Start capturing frames
-            appState.scanInterval = setInterval(captureFrame, 500);
-            
-            console.log("Scanning started...");
-        }
-        
-        // Stop scanning
-        function stopScanning() {
-            elements.startButton.textContent = "Start Scan";
-            clearInterval(appState.scanInterval);
-            
-            if (appState.capturedFrames.length > 0) {
-                elements.processButton.disabled = false;
-            }
-            
-            console.log(`Scanning stopped. Captured ${appState.capturedFrames.length} frames`);
-        }
-        
-        // Capture a frame from the camera
-        function captureFrame() {
-            const canvas = document.createElement('canvas');
-            canvas.width = elements.cameraView.videoWidth;
-            canvas.height = elements.cameraView.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(elements.cameraView, 0, 0);
-            
-            // Store frame data
-            appState.capturedFrames.push({
-                imageData: canvas.toDataURL('image/jpeg', 0.8),
-                timestamp: Date.now(),
-                // In a real app, you'd include device motion data here
-                orientation: {
-                    alpha: 0, beta: 0, gamma: 0 // Placeholder for device orientation
-                }
-            });
-            
-            console.log(`Frame ${appState.capturedFrames.length} captured`);
-        }
-        
-        // Process the captured frames into a 3D model
-        async function processScan() {
-            if (appState.capturedFrames.length < 5) {
-                alert("Not enough frames captured. Please scan from more angles.");
-                return;
-            }
-            
-            showProcessingUI(true);
-            
-            // Simulate processing (in a real app, you'd send to a backend or use WASM)
-            simulateModelProcessing();
-        }
-        
-        // Show processing UI
-        function showProcessingUI(show) {
-            if (show) {
-                elements.progressContainer.style.display = 'block';
-                elements.progressBar.style.width = '0%';
-                elements.startButton.disabled = true;
-                elements.processButton.disabled = true;
-            } else {
-                elements.progressContainer.style.display = 'none';
-                elements.startButton.disabled = false;
-            }
-        }
-        
-        // Simulate model processing (replace with actual implementation)
-        function simulateModelProcessing() {
-            let progress = 0;
-            const interval = setInterval(() => {
-                progress += 5;
-                elements.progressBar.style.width = `${progress}%`;
-                
-                if (progress >= 100) {
-                    clearInterval(interval);
-                    showProcessingUI(false);
-                    init3DViewer();
-                    showModelView();
-                    
-                    // In a real app, you would load the actual generated model
-                    loadSample3DModel();
-                }
-            }, 200);
-        }
-        
-        // Initialize Three.js viewer
-        function init3DViewer() {
-            // Create scene
-            appState.threeJS.scene = new THREE.Scene();
-            appState.threeJS.scene.background = new THREE.Color(0x222222);
-            
-            // Create camera
-            appState.threeJS.camera = new THREE.PerspectiveCamera(
-                75, 
-                window.innerWidth / window.innerHeight, 
-                0.1, 
-                1000
-            );
-            appState.threeJS.camera.position.z = 5;
-            
-            // Create renderer
-            appState.threeJS.renderer = new THREE.WebGLRenderer({ antialias: true });
-            appState.threeJS.renderer.setSize(window.innerWidth, window.innerHeight);
-            elements.modelView.innerHTML = '';
-            elements.modelView.appendChild(appState.threeJS.renderer.domElement);
-            
-            // Add lights
-            const ambientLight = new THREE.AmbientLight(0x404040);
-            appState.threeJS.scene.add(ambientLight);
-            
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(1, 1, 1);
-            appState.threeJS.scene.add(directionalLight);
-            
-            // Add orbit controls in a real implementation
-            // const controls = new THREE.OrbitControls(camera, renderer.domElement);
-            
-            // Animation loop
-            function animate() {
-                requestAnimationFrame(animate);
-                if (appState.threeJS.model) {
-                    appState.threeJS.model.rotation.y += 0.01;
-                }
-                appState.threeJS.renderer.render(appState.threeJS.scene, appState.threeJS.camera);
-            }
-            animate();
-        }
-        
-        // Load a sample 3D model (replace with your generated model)
-        function loadSample3DModel() {
-            // Create a simple placeholder model
-            // In reality, you would load your generated 3D model here
-            
-            // Create a point cloud from the captured frames (simplified)
-            const points = [];
-            const colors = [];
-            
-            // Generate random points for demonstration
-            for (let i = 0; i < 1000; i++) {
-                points.push(
-                    (Math.random() - 0.5) * 2,
-                    (Math.random() - 0.5) * 2,
-                    (Math.random() - 0.5) * 2
-                );
-                
-                colors.push(
-                    Math.random(),
-                    Math.random(),
-                    Math.random()
-                );
-            }
-            
-            const geometry = new THREE.BufferGeometry();
-            geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-            
-            const material = new THREE.PointsMaterial({
-                size: 0.05,
-                vertexColors: true
-            });
-            
-            appState.threeJS.model = new THREE.Points(geometry, material);
-            appState.threeJS.scene.add(appState.threeJS.model);
-        }
-        
-        // Show the 3D model view
-        function showModelView() {
-            document.getElementById('camera-view').style.display = 'none';
-            document.getElementById('scanning-ui').style.display = 'none';
-            document.getElementById('controls').style.display = 'none';
-            elements.modelView.style.display = 'block';
-            elements.backButton.style.display = 'block';
-        }
-        
-        // Show the scanner view
-        function showScannerView() {
-            document.getElementById('camera-view').style.display = 'block';
-            document.getElementById('scanning-ui').style.display = 'block';
-            document.getElementById('controls').style.display = 'flex';
-            elements.modelView.style.display = 'none';
-            elements.backButton.style.display = 'none';
-        }
-        
-        // Handle window resize
-        function handleResize() {
-            if (appState.threeJS.renderer) {
-                appState.threeJS.camera.aspect = window.innerWidth / window.innerHeight;
-                appState.threeJS.camera.updateProjectionMatrix();
-                appState.threeJS.renderer.setSize(window.innerWidth, window.innerHeight);
-            }
-        }
-        
-        // Start the application
-        initApp();
-    </script>
+      }
+    }
+    canvasCtx.restore();
+  });
+
+  const camera = new Camera(videoElement, {
+    onFrame: async () => {
+      await faceMesh.send({image: videoElement});
+    },
+    width: 640,
+    height: 480
+  });
+  camera.start();
+</script>
 </body>
 </html>

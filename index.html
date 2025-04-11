@@ -1,57 +1,74 @@
 ﻿<!DOCTYPE html>
 <html>
 <head>
-  <title>Real-time Face Mesh</title>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <title>Live Object Detection (Full Screen)</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.6.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <style>
+    body, html {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+    }
+    video, canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      object-fit: cover;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
 </head>
 <body>
-<video class="input_video" style="display:none;"></video>
-<canvas class="output_canvas" width="640px" height="480px"></canvas>
+
+<video id="webcam" autoplay playsinline muted></video>
+<canvas id="overlay"></canvas>
 
 <script>
-  const videoElement = document.getElementsByClassName('input_video')[0];
-  const canvasElement = document.getElementsByClassName('output_canvas')[0];
-  const canvasCtx = canvasElement.getContext('2d');
+  const video = document.getElementById('webcam');
+  const canvas = document.getElementById('overlay');
+  const ctx = canvas.getContext('2d');
 
-  const faceMesh = new FaceMesh({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-  });
+  async function setupCamera() {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    return new Promise(resolve => {
+      video.onloadedmetadata = () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        resolve();
+      };
+    });
+  }
 
-  faceMesh.setOptions({
-    maxNumFaces: 1,
-    refineLandmarks: true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5
-  });
+  async function main() {
+    await setupCamera();
+    const model = await cocoSsd.load();
+    
+    async function detect() {
+      const predictions = await model.detect(video);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  faceMesh.onResults((results) => {
-    canvasCtx.save();
-    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-    if (results.multiFaceLandmarks) {
-      for (const landmarks of results.multiFaceLandmarks) {
-        for (let i = 0; i < landmarks.length; i++) {
-          const x = landmarks[i].x * canvasElement.width;
-          const y = landmarks[i].y * canvasElement.height;
-          canvasCtx.beginPath();
-          canvasCtx.arc(x, y, 1, 0, 2 * Math.PI);
-          canvasCtx.fillStyle = 'red';
-          canvasCtx.fill();
-        }
-      }
+      predictions.forEach(pred => {
+        ctx.beginPath();
+        ctx.rect(...pred.bbox);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'lime';
+        ctx.fillStyle = 'lime';
+        ctx.stroke();
+        ctx.font = '16px sans-serif';
+        ctx.fillText(pred.class, pred.bbox[0], pred.bbox[1] > 20 ? pred.bbox[1] - 5 : 10);
+      });
+
+      requestAnimationFrame(detect);
     }
-    canvasCtx.restore();
-  });
 
-  const camera = new Camera(videoElement, {
-    onFrame: async () => {
-      await faceMesh.send({image: videoElement});
-    },
-    width: 640,
-    height: 480
-  });
-  camera.start();
+    detect();
+  }
+
+  main();
 </script>
+
 </body>
 </html>

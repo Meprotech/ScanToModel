@@ -1,71 +1,63 @@
 ﻿<!DOCTYPE html>
 <html>
 <head>
-  <title>Objectron 3D Pose Estimation</title>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/objectron/objectron.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-  <style>
-    body, html {
-      margin: 0;
-      overflow: hidden;
-      background: black;
-    }
-    video, canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-    }
-  </style>
-</head>
-<body>
-  <video class="input_video" autoplay muted playsinline></video>
-  <canvas class="output_canvas"></canvas>
+    <title>Web 3D Scanner</title>
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js';
+        import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.132.2/examples/jsm/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.132.2/examples/jsm/controls/OrbitControls.js';
 
-  <script>
-    const videoElement = document.querySelector('.input_video');
-    const canvasElement = document.querySelector('.output_canvas');
-    const canvasCtx = canvasElement.getContext('2d');
-
-    const objectron = new Objectron({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/objectron/${file}`
-    });
-
-    objectron.setOptions({
-      modelName: 'Laptop', // You can change to 'Cup', 'Chair', 'Shoe', 'Book'
-      maxNumObjects: 1,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.99
-    });
-
-    objectron.onResults((results) => {
-      canvasCtx.save();
-      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-
-      for (const landmark of results.multiObjectLandmarks) {
-        for (const point of landmark) {
-          canvasCtx.beginPath();
-          canvasCtx.arc(point.x * canvasElement.width, point.y * canvasElement.height, 3, 0, 2 * Math.PI);
-          canvasCtx.fillStyle = 'cyan';
-          canvasCtx.fill();
+        // 1. Access device camera
+        async function initCamera() {
+            const video = document.createElement('video');
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' } 
+            });
+            video.srcObject = stream;
+            video.play();
+            return video;
         }
-      }
 
-      canvasCtx.restore();
-    });
+        // 2. Process frames to create 3D model (simplified)
+        async function create3DModel(video) {
+            // In a real app, you would:
+            // - Capture multiple frames from different angles
+            // - Send to photogrammetry API like Kiri Engine
+            // - Receive GLB model
+            
+            // For demo, we'll create a placeholder mesh
+            const geometry = new THREE.BoxGeometry(1,1,1);
+            const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
+            return new THREE.Mesh(geometry, material);
+        }
 
-    const camera = new Camera(videoElement, {
-      onFrame: async () => {
-        await objectron.send({ image: videoElement });
-      },
-      width: 640,
-      height: 480
-    });
-
-    camera.start();
-  </script>
+        // 3. Main function
+        async function main() {
+            const video = await initCamera();
+            const model = await create3DModel(video);
+            
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+            
+            scene.add(model);
+            camera.position.z = 5;
+            
+            new OrbitControls(camera, renderer.domElement);
+            
+            function animate() {
+                requestAnimationFrame(animate);
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+        
+        main().catch(console.error);
+    </script>
+</head>
+<body style="margin:0">
+    <div id="info">Move around object to scan...</div>
 </body>
 </html>

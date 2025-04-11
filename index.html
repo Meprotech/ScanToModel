@@ -1,9 +1,9 @@
 ﻿<!DOCTYPE html>
 <html>
 <head>
-  <title>Live Object Detection (Full Screen)</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.6.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <title>Objectron 3D Pose Estimation</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/objectron/objectron.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <style>
     body, html {
       margin: 0;
@@ -14,61 +14,58 @@
       position: absolute;
       top: 0;
       left: 0;
-      object-fit: cover;
       width: 100vw;
       height: 100vh;
+      object-fit: cover;
     }
   </style>
 </head>
 <body>
+  <video class="input_video" autoplay muted playsinline></video>
+  <canvas class="output_canvas"></canvas>
 
-<video id="webcam" autoplay playsinline muted></video>
-<canvas id="overlay"></canvas>
+  <script>
+    const videoElement = document.querySelector('.input_video');
+    const canvasElement = document.querySelector('.output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
 
-<script>
-  const video = document.getElementById('webcam');
-  const canvas = document.getElementById('overlay');
-  const ctx = canvas.getContext('2d');
-
-  async function setupCamera() {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    video.srcObject = stream;
-    return new Promise(resolve => {
-      video.onloadedmetadata = () => {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        resolve();
-      };
+    const objectron = new Objectron({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/objectron/${file}`
     });
-  }
 
-  async function main() {
-    await setupCamera();
-    const model = await cocoSsd.load();
-    
-    async function detect() {
-      const predictions = await model.detect(video);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    objectron.setOptions({
+      modelName: 'Laptop', // You can change to 'Cup', 'Chair', 'Shoe', 'Book'
+      maxNumObjects: 1,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.99
+    });
 
-      predictions.forEach(pred => {
-        ctx.beginPath();
-        ctx.rect(...pred.bbox);
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = 'lime';
-        ctx.fillStyle = 'lime';
-        ctx.stroke();
-        ctx.font = '16px sans-serif';
-        ctx.fillText(pred.class, pred.bbox[0], pred.bbox[1] > 20 ? pred.bbox[1] - 5 : 10);
-      });
+    objectron.onResults((results) => {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
-      requestAnimationFrame(detect);
-    }
+      for (const landmark of results.multiObjectLandmarks) {
+        for (const point of landmark) {
+          canvasCtx.beginPath();
+          canvasCtx.arc(point.x * canvasElement.width, point.y * canvasElement.height, 3, 0, 2 * Math.PI);
+          canvasCtx.fillStyle = 'cyan';
+          canvasCtx.fill();
+        }
+      }
 
-    detect();
-  }
+      canvasCtx.restore();
+    });
 
-  main();
-</script>
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await objectron.send({ image: videoElement });
+      },
+      width: 640,
+      height: 480
+    });
 
+    camera.start();
+  </script>
 </body>
 </html>
